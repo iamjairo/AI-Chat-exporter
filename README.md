@@ -50,7 +50,10 @@ Save your valuable research, coding sessions, and creative brainstorms with a si
    ```
    *(To develop with hot-reloading, run `npm run dev`)*
 
-4. **Load into your Browser (Chrome):**
+4. **Download it:**
+   - 📥 [Download the zip](./extension.zip)
+
+5. **Load into your Browser (Chrome):**
    - Navigate to `chrome://extensions/` in your browser.
    - Enable **Developer mode** in the top right corner.
    - Click **Load unpacked** and select the `dist` folder generated after building.
