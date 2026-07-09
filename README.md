@@ -51,7 +51,7 @@ Save your valuable research, coding sessions, and creative brainstorms with a si
    *(To develop with hot-reloading, run `npm run dev`)*
 
 4. **Download it:**
-   - 📥 [Download the zip](https://github.com/saubhik-2103/gemini_pdf/raw/main/extension.zip)
+   - 📥 [Download the zip](https://github.com/saubhik-2103/AI-Chat-exporter/raw/main/extension.zip)
 
 5. **Load into your Browser (Chrome):**
    - Navigate to `chrome://extensions/` in your browser.
