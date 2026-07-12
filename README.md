@@ -17,7 +17,9 @@ Save your valuable research, coding sessions, and creative brainstorms with a si
   - 🐳 DeepSeek
   - 💬 Mistral Le Chat
   - 🐼 Qwen
-- **Beautiful Formatting**: Preserves chat structures, Markdown, and styling using `html2pdf.js` and `jsPDF`.
+- **Full-Conversation Capture**: Scroll-collects the entire thread, so even long ChatGPT chats (which virtualize off-screen messages) export completely — nothing dropped.
+- **Clean A4 Output**: Exports via the browser's native print-to-PDF with print-tuned CSS — real A4 page size, sensible page breaks, and long code that wraps instead of clipping.
+- **Syntax-Highlighted Code**: Code blocks are highlighted (`highlight.js`, One-Dark palette) so code stays colored and readable in the PDF.
 - **Math & Equations**: Includes `KaTeX` support for rendering complex mathematical equations properly in the exported PDFs.
 - **Privacy First**: Operates entirely locally in your browser. No chat data is sent to external servers.
 - **Clean UI**: Built with React and TailwindCSS for a sleek, modern user experience.
@@ -26,17 +28,18 @@ Save your valuable research, coding sessions, and creative brainstorms with a si
 
 - **Framework**: [React 19](https://react.dev/) + [Vite](https://vitejs.dev/)
 - **Styling**: [TailwindCSS](https://tailwindcss.com/)
-- **PDF Generation**: [html2pdf.js](https://github.com/eKoopmans/html2pdf.js), [jsPDF](https://github.com/parallax/jsPDF)
+- **PDF Generation**: Browser-native print-to-PDF (A4) with print-optimized CSS
 - **Sanitization & Parsing**: DOMPurify, JSDOM
 - **Math Rendering**: KaTeX
+- **Syntax Highlighting**: highlight.js
 - **Extension Build Tool**: `@crxjs/vite-plugin`
 
 ## 🚀 Installation for Development
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
-   cd gemini_pdf
+   git clone https://github.com/iamjairo/AI-Chat-exporter.git
+   cd AI-Chat-exporter
    ```
 
 2. **Install dependencies:**
@@ -51,7 +54,7 @@ Save your valuable research, coding sessions, and creative brainstorms with a si
    *(To develop with hot-reloading, run `npm run dev`)*
 
 4. **Download it:**
-   - 📥 [Download the zip](https://github.com/saubhik-2103/AI-Chat-exporter/raw/main/extension.zip)
+   - 📥 [Download the zip](https://github.com/iamjairo/AI-Chat-exporter/raw/main/extension.zip)
 
 5. **Load into your Browser (Chrome):**
    - Navigate to `chrome://extensions/` in your browser.
