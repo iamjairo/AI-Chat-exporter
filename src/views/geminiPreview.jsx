@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import hljs from 'highlight.js';
 
 
 export default function GeminiPreview() {
@@ -86,6 +87,24 @@ export default function GeminiPreview() {
       }
     });
 
+    // Step 3: Syntax-highlight every code block. We highlight from the raw text
+    // so it's consistent regardless of how the source platform marked it up.
+    tempDiv.querySelectorAll('pre').forEach(pre => {
+      let codeEl = pre.querySelector('code');
+      if (!codeEl) {
+        codeEl = document.createElement('code');
+        codeEl.textContent = pre.textContent;
+        pre.textContent = '';
+        pre.appendChild(codeEl);
+      }
+      try {
+        delete codeEl.dataset.highlighted;
+        hljs.highlightElement(codeEl);
+      } catch (e) {
+        /* leave the code block un-highlighted on failure */
+      }
+    });
+
     return tempDiv.innerHTML;
   };
 
@@ -139,17 +158,17 @@ export default function GeminiPreview() {
       <div className={`overflow-y-auto ${isMini ? 'p-0' : 'p-8'} flex-1 flex justify-center print:block print:h-auto print:p-0 print:overflow-visible ${isDarkMode ? 'print:bg-[#131314]' : 'print:bg-white'}`}>
         <table className="w-full border-collapse border-0">
           <thead className="hidden print:table-header-group">
-            <tr><td className="border-0 p-0"><div className="h-12"></div></td></tr>
+            <tr><td className="border-0 p-0"><div className="pdf-vspace h-12"></div></td></tr>
           </thead>
           <tfoot className="hidden print:table-footer-group">
-            <tr><td className="border-0 p-0"><div className="h-12"></div></td></tr>
+            <tr><td className="border-0 p-0"><div className="pdf-vspace h-12"></div></td></tr>
           </tfoot>
           <tbody className="border-0">
             <tr>
               <td className="border-0 p-0">
                 <div className="flex justify-center w-full print:block">
                   <div 
-                    className={`w-full max-w-[800px] mx-auto ${isMini ? 'p-6' : 'p-8 pb-20 shadow-2xl'} print:shadow-none print:px-12 print:py-0 print:max-w-none print:w-full transition-colors duration-200
+                    className={`w-full max-w-[800px] mx-auto ${isMini ? 'p-6' : 'p-8 pb-20 shadow-2xl'} print:shadow-none print:px-0 print:py-0 print:max-w-none print:w-full transition-colors duration-200
                       ${isDarkMode 
                         ? 'bg-[#131314] text-[#e3e3e3] print:bg-[#131314] print:text-[#e3e3e3]' 
                         : 'bg-white text-gray-900 print:bg-white print:text-gray-900'
@@ -167,9 +186,9 @@ export default function GeminiPreview() {
 
                     <div className="space-y-8">
                       {chatInfo.messages.map((msg, index) => (
-                        <div 
-                          key={index} 
-                          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-8`}
+                        <div
+                          key={index}
+                          className={`pdf-msg-row flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-8`}
                         >
                           
                           {msg.role === 'model' && (
@@ -189,7 +208,7 @@ export default function GeminiPreview() {
                           )}
 
                           {/* Container that stacks images above the text bubble */}
-                          <div className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[85%] min-w-0`}>
+                          <div className={`pdf-bubble flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} max-w-[85%] min-w-0`}>
                             
                             {/* Text Bubble */}
                             {msg.htmlContent && msg.htmlContent !== '' && (

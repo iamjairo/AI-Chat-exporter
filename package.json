@@ -16,6 +16,7 @@
     "jsdom": "^29.0.2",
     "jspdf": "^4.2.1",
     "katex": "^0.16.45",
+    "highlight.js": "^11.11.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.2"

@@ -147,33 +147,100 @@ input[type="range"]::-moz-range-thumb {
   border: 1px solid #cbd5e1;
 }
 
+/* ======== Syntax highlighting for exported code blocks ========
+   Code renders on a dark surface in BOTH light/dark modes so the token colors
+   stay legible and print consistently (print-color-adjust is forced exact). */
+.gemini-content pre {
+  background: #1e1f20 !important;
+  border: 1px solid #303236 !important;
+  color: #e6e6e6;
+}
+.gemini-content pre code {
+  color: #e6e6e6;
+  background: transparent;
+}
+/* Inline code gets a subtle chip, independent of the block theme. */
+.gemini-content :not(pre) > code {
+  background: rgba(127, 127, 127, 0.16);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.gemini-content .hljs-comment, .gemini-content .hljs-quote { color: #7f848e; font-style: italic; }
+.gemini-content .hljs-keyword, .gemini-content .hljs-selector-tag, .gemini-content .hljs-built_in,
+.gemini-content .hljs-section, .gemini-content .hljs-doctag { color: #c678dd; }
+.gemini-content .hljs-string, .gemini-content .hljs-attr, .gemini-content .hljs-regexp,
+.gemini-content .hljs-addition, .gemini-content .hljs-meta-string { color: #98c379; }
+.gemini-content .hljs-number, .gemini-content .hljs-literal, .gemini-content .hljs-type,
+.gemini-content .hljs-selector-class { color: #d19a66; }
+.gemini-content .hljs-title, .gemini-content .hljs-title.function_,
+.gemini-content .hljs-function .hljs-title, .gemini-content .hljs-selector-id { color: #61afef; }
+.gemini-content .hljs-variable, .gemini-content .hljs-name, .gemini-content .hljs-attribute,
+.gemini-content .hljs-tag, .gemini-content .hljs-deletion { color: #e06c75; }
+.gemini-content .hljs-symbol, .gemini-content .hljs-bullet, .gemini-content .hljs-link,
+.gemini-content .hljs-meta { color: #56b6c2; }
+.gemini-content .hljs-params { color: #e6e6e6; }
+.gemini-content .hljs-emphasis { font-style: italic; }
+.gemini-content .hljs-strong { font-weight: 600; }
+
 @media print {
   * {
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  .gemini-content p, .gemini-content pre, .gemini-content li, .gemini-content table, .gemini-content img {
+
+  /* Fixed A4 page with comfortable margins. The browser paginates natively. */
+  @page {
+    size: A4;
+    margin: 16mm 14mm;
+  }
+  html, body { margin: 0; }
+  html.dark-mode, body.dark-mode { background-color: #131314 !important; }
+  html.light-mode, body.light-mode { background-color: #ffffff !important; }
+
+  /* Only keep atomic things intact; let long prose/code flow across pages so a
+     tall answer never gets clipped or leaves a huge blank gap. */
+  .gemini-content img,
+  .gemini-content tr {
     page-break-inside: avoid;
     break-inside: avoid;
   }
-  .gemini-content pre, .gemini-content code {
+  .gemini-content h1,
+  .gemini-content h2,
+  .gemini-content h3 {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: avoid;   /* don't strand a heading at the page bottom */
+    break-after: avoid;
+  }
+  .gemini-content p, .gemini-content li {
+    orphans: 3;
+    widows: 3;
+  }
+  /* Code: wrap long lines onto the page (never clip), and allow big blocks to
+     span pages instead of being forced whole. */
+  .gemini-content pre {
     white-space: pre-wrap !important;
-    word-wrap: break-word !important;
-    overflow-wrap: break-word !important;
-    word-break: break-all !important;
-    overflow-x: hidden !important;
+    overflow-wrap: anywhere !important;
+    overflow-x: visible !important;
+    page-break-inside: auto;
+    break-inside: auto;
   }
-  @page {
-    margin: 0;
+  .gemini-content code {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
   }
-  html.dark-mode, body.dark-mode {
-    background-color: #131314 !important;
+
+  /* Print as a clean full-width transcript: drop the chat-bubble right-alignment
+     so both roles read top-to-bottom and use the whole A4 width. */
+  .pdf-msg-row {
+    justify-content: flex-start !important;
+    margin-bottom: 1.1rem !important;
   }
-  html.light-mode, body.light-mode {
-    background-color: #ffffff !important;
+  .pdf-bubble {
+    max-width: 100% !important;
+    align-items: flex-start !important;
   }
-  html, body {
-    margin: 0;
-  }
+  .pdf-vspace { height: 0 !important; }
 }
