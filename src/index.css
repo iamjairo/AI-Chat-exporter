@@ -96,6 +96,19 @@ input[type="range"]::-moz-range-thumb {
 .gemini-content table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
 .gemini-content th, .gemini-content td { padding: 0.5rem 1rem; text-align: left; }
 
+/* Keep all scraped content inside the page column — nothing bleeds off the
+   right edge. ChatGPT's file-attachment strips are horizontal flex rows of
+   fixed-width cards; we force them to wrap and cap every element at 100%. */
+.gemini-content { overflow: hidden; overflow-wrap: anywhere; }
+.gemini-content * { max-width: 100% !important; }
+.gemini-content img, .gemini-content video, .gemini-content svg { height: auto !important; }
+.gemini-content .flex,
+.gemini-content [class*="flex"],
+.gemini-content [style*="display: flex"],
+.gemini-content [style*="display:flex"] { flex-wrap: wrap !important; }
+.gemini-content [class*="overflow-x"],
+.gemini-content [style*="overflow-x"] { overflow-x: hidden !important; }
+
 /* ======== KaTeX compatibility with Tailwind ======== */
 
 /* 1. KaTeX computes sizes with content-box — Tailwind sets border-box on *.
@@ -159,12 +172,15 @@ input[type="range"]::-moz-range-thumb {
   color: #e6e6e6;
   background: transparent;
 }
-/* Inline code gets a subtle chip, independent of the block theme. */
+/* Inline code chips get a subtle background AND a color, so words in the little
+   grey boxes are tinted (theme-aware so they read on light or dark pages). */
 .gemini-content :not(pre) > code {
-  background: rgba(127, 127, 127, 0.16);
   padding: 0.1em 0.35em;
   border-radius: 4px;
+  font-weight: 500;
 }
+.dark-mode .gemini-content :not(pre) > code { color: #e5c07b; background: rgba(255, 255, 255, 0.09); }
+.light-mode .gemini-content :not(pre) > code { color: #a626a4; background: rgba(0, 0, 0, 0.055); }
 .gemini-content .hljs-comment, .gemini-content .hljs-quote { color: #7f848e; font-style: italic; }
 .gemini-content .hljs-keyword, .gemini-content .hljs-selector-tag, .gemini-content .hljs-built_in,
 .gemini-content .hljs-section, .gemini-content .hljs-doctag { color: #c678dd; }

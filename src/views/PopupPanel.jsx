@@ -14,6 +14,7 @@ export default function PopupPanel() {
   const [chatData, setChatData] = useState({ title: '', messages: [], platform: '' });
   const [isGenerating, setIsGenerating] = useState(false);
   const [status, setStatus] = useState('idle');
+  const [mdStatus, setMdStatus] = useState('idle');
   const platformLabel = PLATFORM_LABELS[chatData.platform] || 'AI Chat';
 
   useEffect(() => {
@@ -83,11 +84,52 @@ export default function PopupPanel() {
   };
 
   const buttonLabel = {
-    idle: 'Preview & Export',
+    idle: 'Preview & Export PDF',
     generating: 'Opening...',
     done: '✓ Opened!',
     error: '✕ Failed, try again',
   }[status];
+
+  // Build a Markdown document from the captured messages. The ChatGPT API path
+  // keeps each message's raw markdown; other paths fall back to stripped HTML.
+  const buildMarkdown = () => {
+    const lines = [`# ${chatData.title || 'AI Chat Export'}`, ''];
+    for (const m of chatData.messages || []) {
+      lines.push(m.role === 'user' ? '## 🧑 You' : '## 🤖 Assistant', '');
+      const body = m.markdown || (m.htmlContent ? m.htmlContent.replace(/<[^>]+>/g, '') : '');
+      lines.push(body, '');
+    }
+    return lines.join('\n');
+  };
+
+  const downloadMarkdown = () => {
+    if (!chatData.messages || !chatData.messages.length) {
+      setMdStatus('error');
+      setTimeout(() => setMdStatus('idle'), 2000);
+      return;
+    }
+    try {
+      const blob = new Blob([buildMarkdown()], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const safe =
+        (chatData.title || 'ai-chat').replace(/[^\w\- ]+/g, '').trim().slice(0, 80) || 'ai-chat';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safe}.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setMdStatus('done');
+      setTimeout(() => setMdStatus('idle'), 1500);
+    } catch (e) {
+      console.error('Markdown download failed', e);
+      setMdStatus('error');
+      setTimeout(() => setMdStatus('idle'), 2500);
+    }
+  };
+
+  const mdLabel = { idle: 'Download Markdown', done: '✓ Saved .md', error: '✕ Failed' }[mdStatus];
 
   return (
     <div className="w-[360px] mx-auto bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden font-['Inter',system-ui,sans-serif]">
@@ -194,15 +236,36 @@ export default function PopupPanel() {
           )}
           {buttonLabel}
         </button>
+
+        {/* Download as Markdown */}
+        <button
+          onClick={downloadMarkdown}
+          className={`w-full mt-2 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 border transition-all active:scale-[0.98] text-sm
+            ${mdStatus === 'done'
+              ? 'border-green-300 text-green-700 bg-green-50'
+              : mdStatus === 'error'
+                ? 'border-red-300 text-red-700 bg-red-50'
+                : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+            }`}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 15V3" /><path d="M6 11l6 6 6-6" /><path d="M4 21h16" />
+          </svg>
+          {mdLabel}
+        </button>
       </div>
 
       {/* Footer */}
       <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between">
         <span className="text-[10px] text-slate-400 font-medium tracking-wide">S LAB EDITION 1.1</span>
-        <div className="flex items-center gap-4">
-          <a href="#" className="text-[10px] text-slate-400 font-semibold hover:text-slate-600 uppercase tracking-wider">Help</a>
-          <a href="#" className="text-[10px] text-slate-400 font-semibold hover:text-slate-600 uppercase tracking-wider">Settings</a>
-        </div>
+        <a
+          href="https://github.com/iamjairo/AI-Chat-exporter"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] text-slate-400 font-semibold hover:text-slate-600 uppercase tracking-wider"
+        >
+          Help
+        </a>
       </div>
     </div>
   );
