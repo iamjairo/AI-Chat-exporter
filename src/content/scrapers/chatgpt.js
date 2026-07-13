@@ -28,19 +28,42 @@ function messageKey(node) {
   return role + ':' + (node.textContent || '').trim().slice(0, 80);
 }
 
-// The scrollable ancestor that actually holds the conversation. ChatGPT scrolls
-// an inner container, not the window, so we walk up from a message node.
-function findScrollContainer() {
+// Every element that could be the conversation scroller (overflow ancestors of a
+// message + the document). We never rely on guessing THE one correctly.
+function scrollHeightNow() {
+  let max = document.documentElement.scrollHeight;
   const anchor = document.querySelector('[data-message-author-role]');
   let el = anchor ? anchor.parentElement : null;
   while (el && el !== document.body) {
-    const oy = getComputedStyle(el).overflowY;
-    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 40) {
-      return el;
-    }
+    if (el.scrollHeight > max) max = el.scrollHeight;
     el = el.parentElement;
   }
-  return null; // fall back to window scrolling
+  return max;
+}
+
+// Small on-page indicator so the user can see it working (and so a wrong count
+// is immediately diagnosable).
+function makeOverlay() {
+  const el = document.createElement('div');
+  el.id = '__ai_exporter_progress';
+  el.style.cssText =
+    'position:fixed;z-index:2147483647;bottom:22px;left:50%;transform:translateX(-50%);' +
+    'background:#111;color:#fff;padding:10px 16px;border-radius:10px;' +
+    "font:600 13px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
+    'box-shadow:0 8px 28px rgba(0,0,0,.35);pointer-events:none;';
+  (document.body || document.documentElement).appendChild(el);
+  const set = (text) => {
+    el.textContent = text;
+  };
+  return {
+    loading: () => set('Loading history…'),
+    count: (n) => set(`Collecting messages… ${n}`),
+    done: (n) => {
+      set(`Collected ${n} messages ✓`);
+      setTimeout(() => el.remove(), 1600);
+    },
+    remove: () => el.remove(),
+  };
 }
 
 async function extractMessageHtml(node, role) {
@@ -67,73 +90,83 @@ export async function scrape() {
     'Exported ChatGPT Chat'
   );
 
-  // ChatGPT virtualizes long conversations: only the messages near the viewport
-  // stay mounted in the DOM, so a single querySelectorAll misses everything
-  // scrolled out of view. We walk the whole thread top -> bottom and capture
-  // each message's content the moment it's mounted (keyed by data-message-id to
-  // dedupe), so nothing is lost when a node unmounts. Insertion order of the Map
-  // preserves conversation order because we only ever scroll downward.
+  // ChatGPT virtualizes long threads (off-screen messages are unmounted) AND
+  // lazy-loads older history near the top. We therefore:
+  //   1. load all history by repeatedly pulling the FIRST message into view,
+  //   2. sweep top -> bottom by pulling the LAST message into view, collecting
+  //      each message the moment it's mounted (deduped by data-message-id).
+  // scrollIntoView() drives whichever element actually scrolls, so we never
+  // depend on correctly identifying the scroll container.
   const collected = new Map(); // key -> { role, htmlContent }
+  const overlay = makeOverlay();
+
+  const nodesNow = () => document.querySelectorAll('[data-message-author-role]');
 
   const collectVisible = async () => {
-    const nodes = document.querySelectorAll('[data-message-author-role]');
+    const nodes = nodesNow(); // DOM order (top -> bottom)
     for (const node of nodes) {
       const key = messageKey(node);
       if (collected.has(key)) continue;
-      const roleAttr = node.getAttribute('data-message-author-role');
-      const role = roleAttr === 'user' ? 'user' : 'model';
-      const htmlContent = await extractMessageHtml(node, role);
-      if (htmlContent) collected.set(key, { role, htmlContent });
+      const role = node.getAttribute('data-message-author-role') === 'user' ? 'user' : 'model';
+      const html = await extractMessageHtml(node, role);
+      if (html) collected.set(key, { role, htmlContent: html });
     }
+    overlay.count(collected.size);
   };
 
-  const scroller = findScrollContainer();
-  const getMetrics = () =>
-    scroller
-      ? { top: scroller.scrollTop, h: scroller.clientHeight, max: scroller.scrollHeight }
-      : { top: window.scrollY, h: window.innerHeight, max: document.documentElement.scrollHeight };
-  const scrollTo = (y) => {
-    if (scroller) scroller.scrollTop = y;
-    else window.scrollTo(0, y);
-  };
+  const restoreY = window.scrollY;
 
-  // Remember where the user was, so we can restore it afterwards.
-  const restore = getMetrics().top;
-
-  // Start at the very top so virtualization mounts from the beginning.
-  scrollTo(0);
-  await delay(250);
-  await collectVisible();
-
-  let lastMax = -1;
-  let stable = 0;
-  let guard = 0;
-  const MAX_STEPS = 600; // safety cap for very long chats
-  while (guard++ < MAX_STEPS) {
-    const { top, h, max } = getMetrics();
-    await collectVisible();
-
-    if (top + h >= max - 4) {
-      // At the bottom. Stop once the total height stops growing (lazy loads settled).
-      if (max === lastMax) {
-        if (++stable >= 2) break;
+  try {
+    // Phase 1 — load all lazily-fetched history. Don't collect yet (scrolling
+    // up would scramble insertion order); just grow the thread to full length.
+    overlay.loading();
+    let prevH = -1;
+    let noGrow = 0;
+    for (let i = 0; i < 80; i++) {
+      const nodes = nodesNow();
+      if (nodes.length) nodes[0].scrollIntoView({ block: 'start' });
+      await delay(180);
+      const h = scrollHeightNow();
+      if (h <= prevH) {
+        if (++noGrow >= 3) break;
       } else {
-        stable = 0;
+        noGrow = 0;
       }
-      lastMax = max;
-      await delay(220);
-      continue;
+      if (h > prevH) prevH = h;
     }
 
-    scrollTo(Math.min(top + Math.floor(h * 0.85), max));
-    lastMax = max;
-    await delay(180);
+    // Back to the very top, then sweep downward collecting in conversation order.
+    {
+      const nodes = nodesNow();
+      if (nodes.length) nodes[0].scrollIntoView({ block: 'start' });
+    }
+    await delay(200);
+
+    let lastCount = -1;
+    let still = 0;
+    for (let i = 0; i < 1500; i++) {
+      await collectVisible();
+      if (collected.size === lastCount) {
+        if (++still >= 4) break; // no new messages after several nudges -> done
+      } else {
+        still = 0;
+      }
+      lastCount = collected.size;
+      const nodes = nodesNow();
+      if (nodes.length) nodes[nodes.length - 1].scrollIntoView({ block: 'end' });
+      await delay(150);
+    }
+    await collectVisible(); // final sweep
+  } finally {
+    try {
+      window.scrollTo(0, restoreY);
+    } catch {
+      /* ignore */
+    }
   }
 
-  await collectVisible(); // final sweep at the bottom
-  scrollTo(restore); // be polite: put the view back
-
   const messages = Array.from(collected.values());
+  overlay.done(messages.length);
 
   // Fallback: if selectors changed entirely and we found nothing, dump main.
   if (messages.length === 0) {
