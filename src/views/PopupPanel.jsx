@@ -1,4 +1,42 @@
 import React, { useState, useEffect } from 'react';
+import JSZip from 'jszip';
+
+const LANG_EXT = {
+  bash: 'sh', sh: 'sh', shell: 'sh', zsh: 'sh',
+  yaml: 'yml', yml: 'yml', json: 'json', toml: 'toml', ini: 'ini', conf: 'conf',
+  js: 'js', javascript: 'js', ts: 'ts', typescript: 'ts', jsx: 'jsx', tsx: 'tsx',
+  python: 'py', py: 'py', go: 'go', rust: 'rs', rs: 'rs',
+  c: 'c', cpp: 'cpp', 'c++': 'cpp', cs: 'cs', java: 'java', php: 'php', rb: 'rb',
+  html: 'html', css: 'css', scss: 'scss', sql: 'sql', xml: 'xml', md: 'md', markdown: 'md',
+  dockerfile: 'Dockerfile',
+};
+
+// Pull every fenced code block out of the captured messages so they can be
+// saved as individual script files.
+function extractCodeBlocks(messages) {
+  const out = [];
+  const fence = /```([\w+.#-]*)[ \t]*\r?\n([\s\S]*?)```/g;
+  for (const m of messages || []) {
+    if (!m.markdown) continue;
+    let match;
+    while ((match = fence.exec(m.markdown)) !== null) {
+      const lang = (match[1] || '').toLowerCase();
+      const code = match[2].replace(/\s+$/, '') + '\n';
+      if (code.trim()) out.push({ lang, code });
+    }
+  }
+  return out;
+}
+
+function scriptFileName(block, index) {
+  // Prefer a filename the script writes to (cat > path, tee path), else shebang.
+  const hint = block.code.match(/(?:cat|tee)\s+>{0,2}\s*['"]?([\w./-]+\.[\w]+)/);
+  if (hint) return hint[1].split('/').pop();
+  const n = String(index + 1).padStart(2, '0');
+  if (block.lang === 'dockerfile' || /^\s*FROM\s+\S/m.test(block.code)) return `Dockerfile-${n}`;
+  const ext = LANG_EXT[block.lang] || (block.lang && /^[a-z0-9]+$/.test(block.lang) ? block.lang : 'txt');
+  return `script-${n}.${ext}`;
+}
 
 const PLATFORM_LABELS = {
   gemini: 'Gemini',
@@ -15,6 +53,7 @@ export default function PopupPanel() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [status, setStatus] = useState('idle');
   const [mdStatus, setMdStatus] = useState('idle');
+  const [zipStatus, setZipStatus] = useState('idle');
   const platformLabel = PLATFORM_LABELS[chatData.platform] || 'AI Chat';
 
   useEffect(() => {
@@ -130,6 +169,56 @@ export default function PopupPanel() {
   };
 
   const mdLabel = { idle: 'Download Markdown', done: '✓ Saved .md', error: '✕ Failed' }[mdStatus];
+
+  // Extract every code block in the chat and save them as a .zip of script files.
+  const downloadScripts = async () => {
+    const blocks = extractCodeBlocks(chatData.messages);
+    if (!blocks.length) {
+      setZipStatus('empty');
+      setTimeout(() => setZipStatus('idle'), 2200);
+      return;
+    }
+    try {
+      setZipStatus('working');
+      const zip = new JSZip();
+      const used = {};
+      blocks.forEach((b, i) => {
+        let name = scriptFileName(b, i);
+        if (used[name]) {
+          const dot = name.lastIndexOf('.');
+          name = dot > 0 ? `${name.slice(0, dot)}-${used[name]}${name.slice(dot)}` : `${name}-${used[name]}`;
+        }
+        used[scriptFileName(b, i)] = (used[scriptFileName(b, i)] || 0) + 1;
+        zip.file(name, b.code);
+      });
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const safe =
+        (chatData.title || 'ai-chat').replace(/[^\w\- ]+/g, '').trim().slice(0, 60) || 'ai-chat';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safe}-scripts.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setZipStatus('done');
+      setTimeout(() => setZipStatus('idle'), 1800);
+    } catch (e) {
+      console.error('Scripts zip failed', e);
+      setZipStatus('error');
+      setTimeout(() => setZipStatus('idle'), 2500);
+    }
+  };
+
+  const scriptCount = extractCodeBlocks(chatData.messages).length;
+  const zipLabel = {
+    idle: `Download Scripts (${scriptCount})`,
+    working: 'Zipping…',
+    done: '✓ Saved .zip',
+    empty: 'No code blocks found',
+    error: '✕ Failed',
+  }[zipStatus];
 
   return (
     <div className="w-[360px] mx-auto bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden font-['Inter',system-ui,sans-serif]">
@@ -253,6 +342,27 @@ export default function PopupPanel() {
           </svg>
           {mdLabel}
         </button>
+
+        {/* Download code blocks as a .zip of script files */}
+        {scriptCount > 0 && (
+          <button
+            onClick={downloadScripts}
+            disabled={zipStatus === 'working'}
+            className={`w-full mt-2 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 border transition-all active:scale-[0.98] text-sm
+              ${zipStatus === 'done'
+                ? 'border-green-300 text-green-700 bg-green-50'
+                : zipStatus === 'error' || zipStatus === 'empty'
+                  ? 'border-red-300 text-red-700 bg-red-50'
+                  : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+              }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+              <path d="M12 3v4M12 9v2M12 13v2" />
+            </svg>
+            {zipLabel}
+          </button>
+        )}
       </div>
 
       {/* Footer */}

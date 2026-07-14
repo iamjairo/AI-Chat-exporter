@@ -35,8 +35,8 @@ function makeOverlay() {
 
 // ===========================================================================
 // Primary path: ChatGPT's own backend API. Returns the ENTIRE conversation as
-// JSON in one request — no virtualization, no scrolling, correct order — which
-// is the only reliable way to export very large (hundreds of pages) chats.
+// JSON in one request — no virtualization, no scrolling, correct order — the
+// only reliable way to export very large (hundreds of pages) chats.
 // ===========================================================================
 
 function conversationId() {
@@ -68,6 +68,20 @@ function messageMarkdown(msg) {
       .join('\n\n');
   }
   return (c.parts || []).filter((p) => typeof p === 'string').join('\n\n');
+}
+
+// Strip ChatGPT's citation / file-reference markers, which otherwise render as
+// stray boxes and tokens (e.g. bracketed citations and private-use glyphs).
+function cleanCitations(text) {
+  if (!text) return text;
+  return text
+    .replace(/【[^】]*】/g, '') // 【 ... 】 citation brackets
+    .replace(/cite(turn|file)[\w]*/gi, '') // citeturn0file0 tokens
+    .replace(/contentReference\[[^\]]*\]\{[^}]*\}/g, '') // contentReference tokens
+    .replace(/[\u{E000}-\u{F8FF}]/gu, '') // private-use-area citation glyphs
+    .replace(/[\u{FFF9}-\u{FFFC}]/gu, '') // interlinear / object-replacement chars
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 // Render markdown -> HTML while protecting LaTeX from the markdown parser, and
@@ -116,9 +130,8 @@ async function scrapeViaApi(convId, overlay) {
   // Walk the active branch: current_node -> parent -> ... -> root, then reverse.
   const chain = [];
   let id = data.current_node;
-  const guardMax = 100000;
   let guard = 0;
-  while (id && guard++ < guardMax) {
+  while (id && guard++ < 100000) {
     const node = mapping[id];
     if (!node) break;
     if (node.message) chain.push(node.message);
@@ -132,7 +145,7 @@ async function scrapeViaApi(convId, overlay) {
     if (role !== 'user' && role !== 'assistant') continue; // drop system/tool
     if (role === 'assistant' && m.recipient && m.recipient !== 'all') continue; // drop tool calls
     if (m.metadata && m.metadata.is_visually_hidden_from_conversation) continue;
-    const md = messageMarkdown(m);
+    const md = cleanCitations(messageMarkdown(m));
     if (!md || !md.trim()) continue;
     messages.push({ role: role === 'user' ? 'user' : 'model', htmlContent: renderMarkdown(md), markdown: md });
     if (messages.length % 10 === 0) overlay.set(`Fetching conversation… ${messages.length} messages`);
