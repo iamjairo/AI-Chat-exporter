@@ -43,6 +43,7 @@
     "activeTab",
     "scripting",
     "storage",
+    "unlimitedStorage",
     "tabs"
   ],
   "web_accessible_resources": [

@@ -38,6 +38,13 @@ function scriptFileName(block, index) {
   return `script-${n}.${ext}`;
 }
 
+function b64ToUint8(b64) {
+  const bin = atob(b64 || '');
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
 const PLATFORM_LABELS = {
   gemini: 'Gemini',
   chatgpt: 'ChatGPT',
@@ -54,6 +61,7 @@ export default function PopupPanel() {
   const [status, setStatus] = useState('idle');
   const [mdStatus, setMdStatus] = useState('idle');
   const [zipStatus, setZipStatus] = useState('idle');
+  const [attStatus, setAttStatus] = useState('idle');
   const platformLabel = PLATFORM_LABELS[chatData.platform] || 'AI Chat';
 
   useEffect(() => {
@@ -220,6 +228,56 @@ export default function PopupPanel() {
     error: '✕ Failed',
   }[zipStatus];
 
+  // Download the files the user uploaded in the chat (fetched at export time).
+  const attachmentCount = (chatData.attachments || []).length;
+  const downloadAttachments = async () => {
+    const atts = chatData.attachments || [];
+    if (!atts.length) {
+      setAttStatus('empty');
+      setTimeout(() => setAttStatus('idle'), 2200);
+      return;
+    }
+    try {
+      setAttStatus('working');
+      const zip = new JSZip();
+      const used = {};
+      atts.forEach((a) => {
+        let name = a.name || 'file';
+        if (used[name]) {
+          const dot = name.lastIndexOf('.');
+          name = dot > 0 ? `${name.slice(0, dot)}-${used[name]}${name.slice(dot)}` : `${name}-${used[name]}`;
+        }
+        used[a.name || 'file'] = (used[a.name || 'file'] || 0) + 1;
+        zip.file(name, b64ToUint8(a.base64));
+      });
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const safe =
+        (chatData.title || 'ai-chat').replace(/[^\w\- ]+/g, '').trim().slice(0, 60) || 'ai-chat';
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safe}-files.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setAttStatus('done');
+      setTimeout(() => setAttStatus('idle'), 1800);
+    } catch (e) {
+      console.error('Attachments zip failed', e);
+      setAttStatus('error');
+      setTimeout(() => setAttStatus('idle'), 2500);
+    }
+  };
+
+  const attLabel = {
+    idle: `Download Files (${attachmentCount})`,
+    working: 'Zipping…',
+    done: '✓ Saved .zip',
+    empty: 'No files found',
+    error: '✕ Failed',
+  }[attStatus];
+
   return (
     <div className="w-[360px] mx-auto bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden font-['Inter',system-ui,sans-serif]">
       {/* Header */}
@@ -361,6 +419,26 @@ export default function PopupPanel() {
               <path d="M12 3v4M12 9v2M12 13v2" />
             </svg>
             {zipLabel}
+          </button>
+        )}
+
+        {/* Download the user's uploaded files/attachments */}
+        {attachmentCount > 0 && (
+          <button
+            onClick={downloadAttachments}
+            disabled={attStatus === 'working'}
+            className={`w-full mt-2 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 border transition-all active:scale-[0.98] text-sm
+              ${attStatus === 'done'
+                ? 'border-green-300 text-green-700 bg-green-50'
+                : attStatus === 'error' || attStatus === 'empty'
+                  ? 'border-red-300 text-red-700 bg-red-50'
+                  : 'border-slate-300 text-slate-700 bg-white hover:bg-slate-50'
+              }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+            {attLabel}
           </button>
         )}
       </div>

@@ -115,6 +115,60 @@ function renderMarkdown(md) {
   return html;
 }
 
+function blobToBase64(blob) {
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onloadend = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => resolve('');
+    r.readAsDataURL(blob);
+  });
+}
+
+// Download the files the user uploaded in the chat (message.metadata.attachments)
+// via ChatGPT's file endpoint. Returns [{ name, mimeType, base64 }].
+async function fetchAttachments(chain, token, overlay) {
+  const seen = new Set();
+  const metas = [];
+  for (const m of chain) {
+    const atts = (m.metadata && m.metadata.attachments) || [];
+    for (const a of atts) {
+      if (a && a.id && !seen.has(a.id)) {
+        seen.add(a.id);
+        metas.push(a);
+      }
+    }
+  }
+  if (!metas.length) return [];
+
+  const out = [];
+  const authHeaders = token ? { Authorization: 'Bearer ' + token } : {};
+  for (let i = 0; i < metas.length; i++) {
+    const a = metas[i];
+    overlay.set(`Fetching attachment ${i + 1}/${metas.length}…`);
+    try {
+      const dl = await fetch('/backend-api/files/' + a.id + '/download', {
+        credentials: 'include',
+        headers: authHeaders,
+      });
+      if (!dl.ok) continue;
+      const info = await dl.json();
+      const url = info && info.download_url;
+      if (!url) continue;
+      const fr = await fetch(url);
+      if (!fr.ok) continue;
+      const blob = await fr.blob();
+      if (blob.size > 16 * 1024 * 1024) continue; // skip anything over 16MB
+      const base64 = await blobToBase64(blob);
+      if (base64) {
+        out.push({ name: a.name || a.id, mimeType: a.mimeType || a.mime_type || blob.type, base64 });
+      }
+    } catch {
+      /* skip this attachment */
+    }
+  }
+  return out;
+}
+
 async function scrapeViaApi(convId, overlay) {
   overlay.set('Fetching conversation…');
   const token = await getAccessToken();
@@ -153,10 +207,12 @@ async function scrapeViaApi(convId, overlay) {
 
   if (messages.length === 0) throw new Error('API returned no renderable messages');
 
+  const attachments = await fetchAttachments(chain, token, overlay);
+
   const title =
     data.title ||
     getChatTitle(['\\s*-\\s*ChatGPT\\s*$', '\\s*\\|\\s*ChatGPT\\s*$'], 'Exported ChatGPT Chat');
-  return { title, messages, platform: PLATFORM.id };
+  return { title, messages, platform: PLATFORM.id, attachments };
 }
 
 // ===========================================================================
